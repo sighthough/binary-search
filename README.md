@@ -1,6 +1,6 @@
 # binary-search
 binary search , really fast way to find thing in a sorted list
-*Co-authored by [sighthough](https://youtu.be/UtPiUGwu-0Q) and Gemini.*
+*Co-authored by [sighthough](https://youtu.be/UtPiUGwu-0Q) chat-gpt and Gemini.*
 
 watch it in action just pick a number from the list of numbers and start it then click next until it finds it :D
 
