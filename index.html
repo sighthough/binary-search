@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Search Visualizer</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent-blue: #38bdf8;
+            --accent-green: #4ade80;
+            --accent-yellow: #facc15;
+            --accent-red: #f87171;
+            --inactive-color: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        h1 { margin-top: 0; color: var(--accent-blue); text-align: center; }
+        p.subtitle { text-align: center; color: #94a3b8; margin-bottom: 24px; }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        input, button {
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+            font-size: 1rem;
+        }
+
+        button {
+            background: #2563eb;
+            cursor: pointer;
+            font-weight: 600;
+            border: none;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .metric-value { font-size: 1.4rem; font-weight: bold; margin-top: 4px; }
+
+        .array-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #0f172a;
+            border-radius: 8px;
+            min-height: 80px;
+        }
+
+        .array-item {
+            width: 42px;
+            height: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #334155;
+            border-radius: 6px;
+            font-weight: bold;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .array-item .idx { font-size: 0.65rem; color: #94a3b8; position: absolute; top: 2px; }
+        .array-item .val { margin-top: 8px; }
+
+        /* Status States */
+        .array-item.discarded { opacity: 0.2; background: #1e293b; }
+        .array-item.active { background: #1e40af; border: 2px solid var(--accent-blue); }
+        .array-item.mid { background: #854d0e; border: 2px solid var(--accent-yellow); transform: scale(1.1); }
+        .array-item.found { background: #166534; border: 2px solid var(--accent-green); transform: scale(1.15); }
+
+        .log-box {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: monospace;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+        .log-entry { margin-bottom: 4px; color: #cbd5e1; }
+        .log-entry.success { color: var(--accent-green); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Binary Search Halving Visualizer</h1>
+    <p class="subtitle">Watch the search window shrink: 100% &rarr; 50% &rarr; 25% &rarr; 12.5% &rarr; 6.25%</p>
+
+    <div class="controls">
+        <input type="number" id="targetInput" value="42" placeholder="Target Number" min="0" max="99">
+        <button id="startBtn" onclick="startSearch()">Start Search</button>
+        <button id="nextBtn" onclick="nextStep()" disabled>Next Step</button>
+        <button onclick="resetSearch()">Reset</button>
+    </div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div>Active Window Size</div>
+            <div id="windowMetric" class="metric-value">32 items</div>
+        </div>
+        <div class="metric-card">
+            <div>Search Space Left</div>
+            <div id="pctMetric" class="metric-value">100.00%</div>
+        </div>
+        <div class="metric-card">
+            <div>Steps Taken</div>
+            <div id="stepMetric" class="metric-value">0</div>
+        </div>
+    </div>
+
+    <div id="arrayContainer" class="array-container"></div>
+    <div id="logBox" class="log-box"><div class="log-entry">Select a target number and click "Start Search".</div></div>
+</div>
+
+<script>
+    // =========================================================================
+    // 🚀 REUSABLE BINARY SEARCH CORE ENGINE (COPY/RIP THIS FUNCTION)
+    // =========================================================================
+    /**
+     * Standard, bug-free Binary Search implementation.
+     * Uses bitwise/floored math to prevent integer overflow and calculate
+     * the exact 50% midpoint of any active array window.
+     * 
+     * @param {Array<number>} arr - Sorted array of elements
+     * @param {number} target - The value to locate
+     * @returns {number} Index of target if found, otherwise -1
+     */
+    function binarySearchPure(arr, target) {
+        let low = 0;
+        let high = arr.length - 1;
+
+        while (low <= high) {
+            // Calculate exact 50% midpoint index of current active range
+            let mid = Math.floor(low + (high - low) / 2);
+
+            // Check if midpoint holds the target
+            if (arr[mid] === target) {
+                return mid; // Target found
+            }
+
+            // Adjust search boundaries to halve the search space
+            if (arr[mid] < target) {
+                low = mid + 1;  // Target is in top half -> Discard bottom 50%
+            } else {
+                high = mid - 1; // Target is in bottom half -> Discard top 50%
+            }
+        }
+
+        return -1; // Target not present in array
+    }
+    // =========================================================================
+
+
+    // -------------------------------------------------------------------------
+    // 🎨 VISUALIZER DEMONSTRATION LOGIC (UI / DOM Handling)
+    // -------------------------------------------------------------------------
+    const ARRAY_SIZE = 32;
+    const sortedData = Array.from({ length: ARRAY_SIZE }, (_, i) => (i + 1) * 3); // [3, 6, 9 ... 96]
+    
+    let low = 0;
+    let high = ARRAY_SIZE - 1;
+    let stepCount = 0;
+    let target = 42;
+    let searchActive = false;
+
+    function renderArray(midIndex = -1, foundIndex = -1) {
+        const container = document.getElementById('arrayContainer');
+        container.innerHTML = '';
+
+        sortedData.forEach((val, idx) => {
+            const el = document.createElement('div');
+            el.className = 'array-item';
+            
+            if (foundIndex === idx) {
+                el.classList.add('found');
+            } else if (idx === midIndex) {
+                el.classList.add('mid');
+            } else if (idx >= low && idx <= high) {
+                el.classList.add('active');
+            } else {
+                el.classList.add('discarded');
+            }
+
+            el.innerHTML = `<span class="idx">${idx}</span><span class="val">${val}</span>`;
+            container.appendChild(el);
+        });
+    }
+
+    function logMessage(msg, isSuccess = false) {
+        const logBox = document.getElementById('logBox');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${isSuccess ? 'success' : ''}`;
+        entry.textContent = msg;
+        logBox.appendChild(entry);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function updateMetrics(windowSize, pct, steps) {
+        document.getElementById('windowMetric').textContent = `${windowSize} items`;
+        document.getElementById('pctMetric').textContent = `${pct.toFixed(2)}%`;
+        document.getElementById('stepMetric').textContent = steps;
+    }
+
+    function startSearch() {
+        target = parseInt(document.getElementById('targetInput').value, 10);
+        if (isNaN(target)) return;
+
+        low = 0;
+        high = sortedData.length - 1;
+        stepCount = 0;
+        searchActive = true;
+
+        document.getElementById('logBox').innerHTML = '';
+        logMessage(`Starting search for target ${target} in ${sortedData.length} elements.`);
+        
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('nextBtn').disabled = false;
+        
+        updateMetrics(sortedData.length, 100, 0);
+        renderArray();
+    }
+
+    function nextStep() {
+        if (!searchActive || low > high) return;
+
+        stepCount++;
+        let mid = Math.floor(low + (high - low) / 2);
+        let activeSize = high - low + 1;
+        let pctLeft = (activeSize / sortedData.length) * 100;
+
+        updateMetrics(activeSize, pctLeft, stepCount);
+        renderArray(mid);
+
+        logMessage(`Step ${stepCount}: Midpoint index ${mid} (Value: ${sortedData[mid]}). Active range: [${low}..${high}].`);
+
+        if (sortedData[mid] === target) {
+            renderArray(-1, mid);
+            logMessage(`🎯 Found target ${target} at index ${mid} in ${stepCount} steps!`, true);
+            endSearch();
+            return;
+        }
+
+        if (sortedData[mid] < target) {
+            logMessage(`   ${sortedData[mid]} < ${target} -> Discarding lower half [${low}..${mid}]`);
+            low = mid + 1;
+        } else {
+            logMessage(`   ${sortedData[mid]} > ${target} -> Discarding upper half [${mid}..${high}]`);
+            high = mid - 1;
+        }
+
+        if (low > high) {
+            logMessage(`❌ Target ${target} not found in array.`, false);
+            endSearch();
+        }
+    }
+
+    function endSearch() {
+        searchActive = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('nextBtn').disabled = true;
+    }
+
+    function resetSearch() {
+        endSearch();
+        low = 0;
+        high = sortedData.length - 1;
+        stepCount = 0;
+        document.getElementById('logBox').innerHTML = '<div class="log-entry">Select a target number and click "Start Search".</div>';
+        updateMetrics(sortedData.length, 100, 0);
+        renderArray();
+    }
+
+    // Initialize display on load
+    resetSearch();
+</script>
+
+</body>
+</html>
